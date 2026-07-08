@@ -1,6 +1,6 @@
 # ==============================================================================
 # SCRIPT: SubVoid+.py
-# VERSION: 2026.07.06__15.48.18
+# VERSION: 2026.07.07__21.07.26
 # TARGET: Python 3.14.5
 #
 # Copyright (C) 2026 pwshAgyjkcrg761
@@ -58,11 +58,11 @@ import os
 import json
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QPushButton, QFileDialog, QLineEdit, QLabel, 
-                             QMessageBox, QPlainTextEdit)
+                             QMessageBox, QPlainTextEdit, QDialog, QCheckBox)
 from PyQt6.QtGui import QActionGroup, QPalette, QColor
 
 # Easily maintainable application metadata configuration
-APP_VERSION = "2026.07.06__15.48.18"
+APP_VERSION = "2026.07.07__21.07.26"
 
 class SettingsWrapper:
     def __init__(self, config_path):
@@ -201,6 +201,9 @@ class SubtitleEditor(QMainWindow):
         exit_action.triggered.connect(self.close)
         
         tools_menu = menu_bar.addMenu("&Tools")
+        filter_action = tools_menu.addAction("Filters")
+        filter_action.triggered.connect(self.show_filters)
+        
         themes_menu = tools_menu.addMenu("&Themes")
         
         # Theme selection setup
@@ -279,6 +282,19 @@ class SubtitleEditor(QMainWindow):
         self.current_theme = theme_name
         self.apply_theme(theme_name)
 
+    def show_filters(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Filters")
+        layout = QVBoxLayout()
+        
+        check_ads = QCheckBox("Remove ad-related lines (http/https/.com/.net/.org)")
+        check_ads.setChecked(self.settings.value("filter_ads", False))
+        check_ads.stateChanged.connect(lambda state: self.settings.setValue("filter_ads", state == 2))
+        
+        layout.addWidget(check_ads)
+        dialog.setLayout(layout)
+        dialog.exec()
+
     def show_about(self):
         about_text = (
             f"<b>SubVoid+ v{APP_VERSION}</b><br>"
@@ -303,8 +319,9 @@ class SubtitleEditor(QMainWindow):
         find_terms = [line.strip() for line in full_find_text.splitlines() if line.strip()]
         replace_text = self.input_replace.text()
         
-        if not find_terms:
-            QMessageBox.warning(self, "Input Required", "Please enter text to find.")
+        filter_enabled = self.settings.value("filter_ads", False)
+        if not find_terms and not filter_enabled:
+            QMessageBox.warning(self, "Input Required", "Please enter text to find or enable the Ad Filter.")
             return
 
         clean_dir = os.path.normpath(self.last_directory)
@@ -320,9 +337,14 @@ class SubtitleEditor(QMainWindow):
                 
                 try:
                     with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
-                        content = f.read()
+                        original_content = f.read()
                     
-                    modified = False
+                    content = original_content
+                    if self.settings.value("filter_ads", False):
+                        ad_terms = ["http", "https", ".com", ".net", ".org"]
+                        content = "\n".join([line for line in content.splitlines() if not any(ad in line.lower() for ad in ad_terms)])
+                    
+                    modified = (content != original_content)
                     for term in find_terms:
                         if term in content:
                             content = content.replace(term, replace_text)
