@@ -18,7 +18,8 @@ Key operational features include:
     * **Ads:** Detects common URL structures (`.com`, `.net`, etc.).
     * **Recruiters:** Identifies fansub crew recruitment phrases (e.g., "we need translators").
     * **Spam:** Strips Ethereum/Bitcoin wallet addresses and email contact info.
-4. **Non-Destructive Output:** Operates with a safety-first philosophy. Original files are never modified; processed subtitles are saved to a dedicated `_updated-SubVoid+` directory to ensure data integrity.
+4. **Recursive Folder Mirroring:** When the recursive option is enabled, the utility scans all nested subdirectories. To maintain organization, it recreates the original directory hierarchy within the output folder.
+5. **Non-Destructive Output:** Operates with a safety-first philosophy. Original files are never modified; processed subtitles are saved to a dedicated `_updated-SubVoid+` directory to ensure data integrity.
 
 ---
 
@@ -28,6 +29,7 @@ Key operational features include:
 | :--- | :--- |
 | **Case Sensitive Find** | Enforces strict character case matching during search operations. |
 | **Delete Lines with Matches** | Completely strips the entire text payload from a line if any user-defined search term matches it. |
+| **Process Subdirectories (Recursive)** | Scans all folders within the target directory and mirrors the source structure in the output location. |
 | **Recruitment Filter** | Detects and removes multi-line fansub crew recruitment blocks and introductory promotional phrases. |
 | **Spam Filter** | Strips cryptographic wallet addresses, credit card number groups, and payment keywords. |
 | **Theme Engine** | Supports Dark, Light, and System-synced UI modes via a custom QPalette implementation. |
@@ -61,4 +63,4 @@ This software is released under the **GNU General Public License v3**.
 ---
 > **Document Control**<br>
 > *This document is up-to-date with the following version of SubVoid+.*<br>
-> *2026.07.12__07.54.33*
+> *2026.07.12__13.43.00*
