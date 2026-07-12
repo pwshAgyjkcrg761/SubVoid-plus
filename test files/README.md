@@ -1,4 +1,4 @@
-# Test Files for SubVoid+
+# Test Files for SubVoid+™
 
 This directory contains specialized test files designed to validate the filtering and block-level parsing logic of the <a href="https://codeberg.org/pwshAgyjkcrg761/SubVoid-plus" target="_blank">SubVoid+</a> script.
 
