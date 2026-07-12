@@ -1,6 +1,6 @@
 # ==============================================================================
 # SCRIPT: SubVoid+.py
-# VERSION: 2026.07.12__07.54.33
+# VERSION: 2026.07.12__13.43.00
 # TARGET: Python 3.14.5
 #
 # Copyright (C) 2026 pwshAgyjkcrg761
@@ -70,7 +70,7 @@ from PyQt6.QtGui import QActionGroup, QPalette, QColor, QIcon
 import ctypes
 
 # Easily maintainable application metadata configuration
-APP_VERSION = "2026.07.12__07.54.33"
+APP_VERSION = "2026.07.12__13.43.00"
 
 class SettingsWrapper:
     def __init__(self, config_path):
@@ -160,6 +160,10 @@ class SubtitleEditor(QMainWindow):
         self.check_purge.setToolTip("Completely strip the entire text payload from a line if any search term matches it.")
         layout.addWidget(self.check_purge, alignment=Qt.AlignmentFlag.AlignLeft)
 
+        self.check_recursive = QCheckBox("Process Subdirectories (Recursive)")
+        self.check_recursive.setToolTip("Scan all folders inside the selected directory and mirror the structure in the output.")
+        layout.addWidget(self.check_recursive, alignment=Qt.AlignmentFlag.AlignLeft)
+
         # Process Button
         btn_run = QPushButton("Process Subtitles")
         btn_run.clicked.connect(self.run_process)
@@ -176,6 +180,9 @@ class SubtitleEditor(QMainWindow):
                     config = json.load(f)
                     self.input_find.setPlainText(config.get("find_text", ""))
                     self.input_replace.setText(config.get("replace_text", ""))
+                    self.check_recursive.setChecked(config.get("recursive", False))
+                    self.check_case.setChecked(config.get("case_sensitive", False))
+                    self.check_purge.setChecked(config.get("purge_matches", False))
             except:
                 pass
 
@@ -219,6 +226,9 @@ class SubtitleEditor(QMainWindow):
         self.settings.setValue("height", self.height())
         self.settings.setValue("find_text", self.input_find.toPlainText())
         self.settings.setValue("replace_text", self.input_replace.text())
+        self.settings.setValue("recursive", self.check_recursive.isChecked())
+        self.settings.setValue("case_sensitive", self.check_case.isChecked())
+        self.settings.setValue("purge_matches", self.check_purge.isChecked())
         self.settings.setValue("theme", self.current_theme)
         event.accept()
 
@@ -413,12 +423,13 @@ class SubtitleEditor(QMainWindow):
             f"</ul>"
             f"<h2>USAGE WORKFLOW</h2>"
             f"<div class='step-card'><b>1. Select Folder:</b> Choose the directory containing your subtitle files.</div>"
-            f"<div class='step-card'><b>2. Configuration:</b> Enter text to find/replace, or configure automated filters via <code>Tools > Filters</code>.</div>"
+            f"<div class='step-card'><b>2. Configuration:</b> Enter find/replace text, enable automated filters via <code>Tools > Filters</code>, or toggle <b>Recursive</b> mode to scan subdirectories.</div>"
             f"<div class='step-card'><b>3. Process:</b> Click 'Process Subtitles'. Results are saved to a new folder appended with <i>_updated-SubVoid+</i>.</div>"
             f"<h2>CORE FEATURES</h2>"
             f"<p><b>SRT Block Awareness:</b> For SRT files, if an advertisement or filter match is found, the entire multi-line subtitle block for that timestamp is purged.</p>"
             f"<p><b>Automated Filters:</b> Removes cryptographic wallet addresses, email spam, recruitment text, and common ad URLs automatically.</p>"
             f"<p><b>Purge Mode:</b> If 'Delete Lines with Matches' is enabled, any line containing your custom 'Find' text will be wiped completely.</p>"
+            f"<p><b>Recursive Mirroring:</b> When recursive mode is active, the script scans all subfolders and recreates the exact directory hierarchy within the output folder.</p>"
             f"<h2>NOTES</h2>"
             f"<ul>"
             f"<li><b>Safety:</b> The script never modifies your original files; it creates sanitized copies in a separate directory to prevent data loss.</li>"
@@ -555,175 +566,192 @@ class SubtitleEditor(QMainWindow):
         )
         
         count = 0
-        for filename in os.listdir(self.last_directory):
-            if filename.endswith((".srt", ".ass", ".ssa")):
-                file_path = os.path.join(self.last_directory, filename)
+        # Collect all applicable files
+        file_tasks = []
+        if self.check_recursive.isChecked():
+            for root, dirs, files in os.walk(self.last_directory):
+                for f in files:
+                    if f.lower().endswith((".srt", ".ass", ".ssa")):
+                        file_tasks.append(os.path.join(root, f))
+        else:
+            for f in os.listdir(self.last_directory):
+                if f.lower().endswith((".srt", ".ass", ".ssa")):
+                    file_tasks.append(os.path.join(self.last_directory, f))
+
+        for file_path in file_tasks:
+            filename = os.path.basename(file_path)
+            
                 
-                try:
-                    with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
-                        original_content = f.read()
-                    
-                    content = original_content
-                    is_ass_ssa = filename.lower().endswith((".ass", ".ssa"))
-                    is_srt = filename.lower().endswith(".srt")
-                    
-                    input_lines = content.splitlines()
-                    total_lines = len(input_lines)
-                    skip_indices = set()
-                    
-                    role_regex = re.compile(r'if\s+you\'re\s+(?:translator|editor|tlc|raw-provider|uploader|sponsor|typesetter)', re.IGNORECASE)
-                    contact_regex = re.compile(r'contact\s+us', re.IGNORECASE)
-                    srt_time_pattern = re.compile(r'^\d+:\d+:\d+[\.,]\d+\s*-->\s*\d+:\d+:\d+[\.,]\d+$')
-                    
-                    # Helper function to extract text payload from any given line index safely
-                    def get_line_payload(idx):
-                        if idx < 0 or idx >= total_lines:
-                            return None, False
-                        l_text = input_lines[idx]
-                        cleaned_l = l_text.strip()
-                        if is_ass_ssa:
-                            if ":" in l_text:
-                                tag, payload = l_text.split(":", 1)
-                                if tag.strip().lower() in ("dialogue", "comment"):
-                                    parts = payload.split(",", 9)
-                                    return (parts[9] if len(parts) == 10 else payload), True
-                        elif is_srt:
-                            if cleaned_l != "" and not cleaned_l.isdigit() and not srt_time_pattern.match(cleaned_l):
-                                return l_text, True
+            try:
+                with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                    original_content = f.read()
+                
+                content = original_content
+                is_ass_ssa = filename.lower().endswith((".ass", ".ssa"))
+                is_srt = filename.lower().endswith(".srt")
+                
+                input_lines = content.splitlines()
+                total_lines = len(input_lines)
+                skip_indices = set()
+                
+                role_regex = re.compile(r'if\s+you\'re\s+(?:translator|editor|tlc|raw-provider|uploader|sponsor|typesetter)', re.IGNORECASE)
+                contact_regex = re.compile(r'contact\s+us', re.IGNORECASE)
+                srt_time_pattern = re.compile(r'^\d+:\d+:\d+[\.,]\d+\s*-->\s*\d+:\d+:\d+[\.,]\d+$')
+                
+                # Helper function to extract text payload from any given line index safely
+                def get_line_payload(idx):
+                    if idx < 0 or idx >= total_lines:
                         return None, False
-
-                    # Pass 1: Block-level detection for SRT files and multi-line tracking for ASS/SSA
-                    for idx in range(total_lines):
-                        if is_srt and srt_time_pattern.match(input_lines[idx]):
-                            block_indices = []
-                            block_text = ""
-                            curr = idx + 1
-                            # Identify all text lines belonging to this timestamp block
-                            while curr < total_lines and input_lines[curr].strip() != "" and not srt_time_pattern.match(input_lines[curr]) and not input_lines[curr].isdigit():
-                                block_indices.append(curr)
-                                block_text += input_lines[curr] + " "
-                                curr += 1
-                            
-                            # Check if the combined block text triggers any enabled filters or manual purges
-                            match_found = False
-                            if filter_ads_enabled and ad_pattern.search(block_text): match_found = True
-                            elif filter_tags_enabled and tag_pattern.search(block_text): match_found = True
-                            elif filter_spam_enabled and spam_pattern.search(block_text): match_found = True
-                            elif filter_recruits_enabled and recruit_pattern.search(block_text): match_found = True
-                            elif find_terms and self.check_purge.isChecked():
-                                flags = 0 if self.check_case.isChecked() else re.IGNORECASE
-                                for term in find_terms:
-                                    if re.search(re.escape(term), block_text, flags):
-                                        match_found = True
-                                        break
-                            
-                            if match_found:
-                                for b_idx in block_indices:
-                                    skip_indices.add(b_idx)
-
-                        elif is_ass_ssa and filter_recruits_enabled:
-                            sub_text, is_eligible = get_line_payload(idx)
-                            if is_eligible and role_regex.search(sub_text):
-                                prev_text, prev_eligible = get_line_payload(idx - 1)
-                                if prev_eligible and contact_regex.search(prev_text):
-                                    skip_indices.add(idx); skip_indices.add(idx - 1)
-                                next_text, next_eligible = get_line_payload(idx + 1)
-                                if next_eligible and contact_regex.search(next_text):
-                                    skip_indices.add(idx); skip_indices.add(idx + 1)
-
-                    # Pass 2: Line Parsing and Content Substitutions / Stripping
-                    protected_lines = []
-                    in_events_section = False
-                    
-                    for idx in range(total_lines):
-                        line = input_lines[idx]
-                        cleaned_line = line.strip()
-                        
-                        # Section tracking for ASS/SSA structures
-                        if is_ass_ssa:
-                            if cleaned_line.lower() == "[events]":
-                                in_events_section = True
-                                protected_lines.append(line)
-                                continue
-                            elif cleaned_line.startswith("[") and cleaned_line.endswith("]"):
-                                in_events_section = False
-                                protected_lines.append(line)
-                                continue
-
-                        # Classify line components to check if content scanning is allowed
-                        is_eligible_content = False
-                        sub_text = line
-                        parts = []
-                        tag = ""
-                        
-                        if is_ass_ssa and ":" in line:
-                            tag, payload = line.split(":", 1)
-                            if in_events_section and tag.strip().lower() in ("dialogue", "comment"):
-                                is_eligible_content = True
+                    l_text = input_lines[idx]
+                    cleaned_l = l_text.strip()
+                    if is_ass_ssa:
+                        if ":" in l_text:
+                            tag, payload = l_text.split(":", 1)
+                            if tag.strip().lower() in ("dialogue", "comment"):
                                 parts = payload.split(",", 9)
-                                if len(parts) == 10:
-                                    sub_text = parts[9]
-                                else:
-                                    sub_text = payload
-                        elif is_srt:
-                            if not cleaned_line.isdigit() and not srt_time_pattern.match(cleaned_line) and cleaned_line != "":
-                                is_eligible_content = True
+                                return (parts[9] if len(parts) == 10 else payload), True
+                    elif is_srt:
+                        if cleaned_l != "" and not cleaned_l.isdigit() and not srt_time_pattern.match(cleaned_l):
+                            return l_text, True
+                    return None, False
 
-                        # Handle Automated Filters (Stripping onscreen text only)
-                        if is_eligible_content:
-                            if is_ass_ssa and cleaned_line.startswith(";"):
-                                pass  # Avoid touching native file comments
-                            else:
-                                is_spam_ad = False
-                                if idx in skip_indices:
-                                    is_spam_ad = True
-                                elif filter_ads_enabled and ad_pattern.search(sub_text):
-                                    is_spam_ad = True
-                                elif filter_tags_enabled and tag_pattern.search(sub_text):
-                                    is_spam_ad = True
-                                elif filter_spam_enabled and spam_pattern.search(sub_text):
-                                    is_spam_ad = True
-                                elif filter_recruits_enabled and recruit_pattern.search(sub_text):
-                                    is_spam_ad = True
-                                    
-                                if is_spam_ad:
-                                    sub_text = ""
-
-                        # Handle manual user find/replace modifications securely inside text payload segments
-                        if find_terms and is_eligible_content and sub_text != "":
+                # Pass 1: Block-level detection for SRT files and multi-line tracking for ASS/SSA
+                for idx in range(total_lines):
+                    if is_srt and srt_time_pattern.match(input_lines[idx]):
+                        block_indices = []
+                        block_text = ""
+                        curr = idx + 1
+                        # Identify all text lines belonging to this timestamp block
+                        while curr < total_lines and input_lines[curr].strip() != "" and not srt_time_pattern.match(input_lines[curr]) and not input_lines[curr].isdigit():
+                            block_indices.append(curr)
+                            block_text += input_lines[curr] + " "
+                            curr += 1
+                        
+                        # Check if the combined block text triggers any enabled filters or manual purges
+                        match_found = False
+                        if filter_ads_enabled and ad_pattern.search(block_text): match_found = True
+                        elif filter_tags_enabled and tag_pattern.search(block_text): match_found = True
+                        elif filter_spam_enabled and spam_pattern.search(block_text): match_found = True
+                        elif filter_recruits_enabled and recruit_pattern.search(block_text): match_found = True
+                        elif find_terms and self.check_purge.isChecked():
                             flags = 0 if self.check_case.isChecked() else re.IGNORECASE
                             for term in find_terms:
-                                term_pattern = re.compile(re.escape(term), flags)
-                                if term_pattern.search(sub_text):
-                                    if self.check_purge.isChecked():
-                                        sub_text = ""
-                                        break
-                                    else:
-                                        sub_text = term_pattern.sub(replace_text, sub_text)
-
-                        # Re-aggregate text segment back into the original line structure
-                        if is_eligible_content:
-                            if is_ass_ssa:
-                                if len(parts) == 10:
-                                    parts[9] = sub_text
-                                    line = f"{tag}:{','.join(parts)}"
-                                else:
-                                    line = f"{tag}:{sub_text}"
-                            elif is_srt:
-                                line = sub_text
-
-                        protected_lines.append(line)
+                                if re.search(re.escape(term), block_text, flags):
+                                    match_found = True
+                                    break
                         
-                    content = "\n".join(protected_lines)
-                    modified = (content != original_content)
+                        if match_found:
+                            for b_idx in block_indices:
+                                skip_indices.add(b_idx)
+
+                    elif is_ass_ssa and filter_recruits_enabled:
+                        sub_text, is_eligible = get_line_payload(idx)
+                        if is_eligible and role_regex.search(sub_text):
+                            prev_text, prev_eligible = get_line_payload(idx - 1)
+                            if prev_eligible and contact_regex.search(prev_text):
+                                skip_indices.add(idx); skip_indices.add(idx - 1)
+                            next_text, next_eligible = get_line_payload(idx + 1)
+                            if next_eligible and contact_regex.search(next_text):
+                                skip_indices.add(idx); skip_indices.add(idx + 1)
+
+                # Pass 2: Line Parsing and Content Substitutions / Stripping
+                protected_lines = []
+                in_events_section = False
+                
+                for idx in range(total_lines):
+                    line = input_lines[idx]
+                    cleaned_line = line.strip()
                     
-                    if modified:
-                        new_file_path = os.path.join(output_dir, filename)
-                        with open(new_file_path, 'w', encoding='utf-8') as f:
-                            f.write(content)
-                        count += 1
-                except Exception as e:
-                    print(f"Error processing {filename}: {e}")
+                    # Section tracking for ASS/SSA structures
+                    if is_ass_ssa:
+                        if cleaned_line.lower() == "[events]":
+                            in_events_section = True
+                            protected_lines.append(line)
+                            continue
+                        elif cleaned_line.startswith("[") and cleaned_line.endswith("]"):
+                            in_events_section = False
+                            protected_lines.append(line)
+                            continue
+
+                    # Classify line components to check if content scanning is allowed
+                    is_eligible_content = False
+                    sub_text = line
+                    parts = []
+                    tag = ""
+                    
+                    if is_ass_ssa and ":" in line:
+                        tag, payload = line.split(":", 1)
+                        if in_events_section and tag.strip().lower() in ("dialogue", "comment"):
+                            is_eligible_content = True
+                            parts = payload.split(",", 9)
+                            if len(parts) == 10:
+                                sub_text = parts[9]
+                            else:
+                                sub_text = payload
+                    elif is_srt:
+                        if not cleaned_line.isdigit() and not srt_time_pattern.match(cleaned_line) and cleaned_line != "":
+                            is_eligible_content = True
+
+                    # Handle Automated Filters (Stripping onscreen text only)
+                    if is_eligible_content:
+                        if is_ass_ssa and cleaned_line.startswith(";"):
+                            pass  # Avoid touching native file comments
+                        else:
+                            is_spam_ad = False
+                            if idx in skip_indices:
+                                is_spam_ad = True
+                            elif filter_ads_enabled and ad_pattern.search(sub_text):
+                                is_spam_ad = True
+                            elif filter_tags_enabled and tag_pattern.search(sub_text):
+                                is_spam_ad = True
+                            elif filter_spam_enabled and spam_pattern.search(sub_text):
+                                is_spam_ad = True
+                            elif filter_recruits_enabled and recruit_pattern.search(sub_text):
+                                is_spam_ad = True
+                                
+                            if is_spam_ad:
+                                sub_text = ""
+
+                    # Handle manual user find/replace modifications securely inside text payload segments
+                    if find_terms and is_eligible_content and sub_text != "":
+                        flags = 0 if self.check_case.isChecked() else re.IGNORECASE
+                        for term in find_terms:
+                            term_pattern = re.compile(re.escape(term), flags)
+                            if term_pattern.search(sub_text):
+                                if self.check_purge.isChecked():
+                                    sub_text = ""
+                                    break
+                                else:
+                                    sub_text = term_pattern.sub(replace_text, sub_text)
+
+                    # Re-aggregate text segment back into the original line structure
+                    if is_eligible_content:
+                        if is_ass_ssa:
+                            if len(parts) == 10:
+                                parts[9] = sub_text
+                                line = f"{tag}:{','.join(parts)}"
+                            else:
+                                line = f"{tag}:{sub_text}"
+                        elif is_srt:
+                            line = sub_text
+
+                    protected_lines.append(line)
+                    
+                content = "\n".join(protected_lines)
+                modified = (content != original_content)
+                
+                if modified:
+                    # Mirror the source subdirectory structure in the output folder
+                    rel_path = os.path.relpath(os.path.dirname(file_path), self.last_directory)
+                    target_dir = os.path.join(output_dir, rel_path)
+                    os.makedirs(target_dir, exist_ok=True)
+                    
+                    new_file_path = os.path.join(target_dir, filename)
+                    with open(new_file_path, 'w', encoding='utf-8') as f:
+                        f.write(content)
+                    count += 1
+            except Exception as e:
+                print(f"Error processing {filename}: {e}")
         
         QMessageBox.information(self, "Complete", f"Processed {count} files.\n\nSaved to: {output_dir}")
 
