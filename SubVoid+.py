@@ -1,6 +1,6 @@
 # ==============================================================================
 # SCRIPT: SubVoid+.py
-# VERSION: 2026.07.11__15.41.51
+# VERSION: 2026.07.12__07.54.33
 # TARGET: Python 3.14.5
 #
 # Copyright (C) 2026 pwshAgyjkcrg761
@@ -61,15 +61,16 @@ import sys
 import os
 import json
 import re
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QPushButton, QFileDialog, QLineEdit, QLabel, 
                              QMessageBox, QPlainTextEdit, QDialog, QCheckBox,
-                             QTextBrowser)
+                             QTextBrowser, QDialogButtonBox)
 from PyQt6.QtGui import QActionGroup, QPalette, QColor, QIcon
 import ctypes
 
 # Easily maintainable application metadata configuration
-APP_VERSION = "2026.07.11__15.41.51"
+APP_VERSION = "2026.07.12__07.54.33"
 
 class SettingsWrapper:
     def __init__(self, config_path):
@@ -153,11 +154,11 @@ class SubtitleEditor(QMainWindow):
         
         self.check_case = QCheckBox("Case Sensitive Find")
         self.check_case.setToolTip("Enforce strict character case matching during search operations.")
-        layout.addWidget(self.check_case)
+        layout.addWidget(self.check_case, alignment=Qt.AlignmentFlag.AlignLeft)
         
         self.check_purge = QCheckBox("Delete Lines with Matches")
         self.check_purge.setToolTip("Completely strip the entire text payload from a line if any search term matches it.")
-        layout.addWidget(self.check_purge)
+        layout.addWidget(self.check_purge, alignment=Qt.AlignmentFlag.AlignLeft)
 
         # Process Button
         btn_run = QPushButton("Process Subtitles")
@@ -263,6 +264,8 @@ class SubtitleEditor(QMainWindow):
                 action.setChecked(True)
         
         help_menu = menu_bar.addMenu("&Help")
+        manual_action = help_menu.addAction("Manual")
+        manual_action.triggered.connect(self.show_manual)
         about_action = help_menu.addAction("About")
         about_action.triggered.connect(self.show_about)
 
@@ -328,56 +331,153 @@ class SubtitleEditor(QMainWindow):
         
         check_ads = QCheckBox("Remove ad-related lines (http/https/.com/.net/.org)")
         check_ads.setChecked(self.settings.value("filter_ads", False))
-        check_ads.stateChanged.connect(lambda state: self.settings.setValue("filter_ads", state == 2))
-        
         layout.addWidget(check_ads)
         
         check_tags = QCheckBox("Remove hashtag lines (#tags)")
         check_tags.setChecked(self.settings.value("filter_tags", False))
-        check_tags.stateChanged.connect(lambda state: self.settings.setValue("filter_tags", state == 2))
         layout.addWidget(check_tags)
         
         check_spam = QCheckBox("Remove Donation && Contact Spam (Crypto, Emails, Cards)")
         check_spam.setChecked(self.settings.value("filter_spam", False))
-        check_spam.stateChanged.connect(lambda state: self.settings.setValue("filter_spam", state == 2))
         layout.addWidget(check_spam)
         
         check_recruits = QCheckBox("Remove Recruitment && Sub Promotional Lines")
         check_recruits.setChecked(self.settings.value("filter_recruits", False))
-        check_recruits.stateChanged.connect(lambda state: self.settings.setValue("filter_recruits", state == 2))
         layout.addWidget(check_recruits)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        layout.addWidget(buttons)
+
+        def save_settings():
+            self.settings.setValue("filter_ads", check_ads.isChecked())
+            self.settings.setValue("filter_tags", check_tags.isChecked())
+            self.settings.setValue("filter_spam", check_spam.isChecked())
+            self.settings.setValue("filter_recruits", check_recruits.isChecked())
+            dialog.accept()
+
+        buttons.accepted.connect(save_settings)
+        buttons.rejected.connect(dialog.reject)
+        
         dialog.setLayout(layout)
+        dialog.exec()
+
+    def show_manual(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Manual")
+        dialog.resize(650, 550)
+        layout = QVBoxLayout(dialog)
+
+        text_browser = QTextBrowser()
+        text_browser.setOpenExternalLinks(True)
+        text_browser.setStyleSheet("""
+            QTextBrowser {
+                font-family: 'Segoe UI', 'Roboto', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+                color: palette(text);
+                background-color: palette(base);
+                border: none;
+                padding: 20px;
+            }
+            h1 { color: #007acc; font-size: 22px; margin-bottom: 0px; }
+            h2 { color: #007acc; font-size: 18px; border-bottom: 1px solid #444; padding-bottom: 5px; margin-top: 25px; }
+            b { color: #007acc; }
+            .step-card {
+                background-color: rgba(0, 122, 204, 0.05);
+                border: 1px solid rgba(0, 122, 204, 0.2);
+                border-radius: 6px;
+                padding: 12px;
+                margin-bottom: 10px;
+            }
+            code { 
+                font-family: 'Consolas', monospace; 
+                background-color: rgba(128, 128, 128, 0.2); 
+                padding: 2px 5px; 
+                border-radius: 3px; 
+            }
+            a { color: #007acc; text-decoration: none; }
+        """)
+
+        manual_text = (
+            f"<h1>SubVoid+ v{APP_VERSION}</h1>"
+            f"<p style='margin-top: 0;'>MANUAL & USAGE GUIDE | Copyright (C) 2026 pwshAgyjkcrg761</p>"
+            f"<br>"
+            f"<h2>OVERVIEW</h2>"
+            f"<p>SubVoid+ is a specialized subtitle cleanup utility designed to strip advertisements, "
+            f"recruitment spam, and social media tags from <b>.srt</b>, <b>.ass</b>, and <b>.ssa</b> files while maintaining "
+            f"original formatting and file integrity.</p>"
+            f"<h2>DEPENDENCIES</h2>"
+            f"<ul>"
+            f"<li><b>Python:</b> Built with Python 3.14.5.</li>"
+            f"<li><b>PyQt6:</b> Orchestrates the graphical user interface.</li>"
+            f"</ul>"
+            f"<h2>USAGE WORKFLOW</h2>"
+            f"<div class='step-card'><b>1. Select Folder:</b> Choose the directory containing your subtitle files.</div>"
+            f"<div class='step-card'><b>2. Configuration:</b> Enter text to find/replace, or configure automated filters via <code>Tools > Filters</code>.</div>"
+            f"<div class='step-card'><b>3. Process:</b> Click 'Process Subtitles'. Results are saved to a new folder appended with <i>_updated-SubVoid+</i>.</div>"
+            f"<h2>CORE FEATURES</h2>"
+            f"<p><b>SRT Block Awareness:</b> For SRT files, if an advertisement or filter match is found, the entire multi-line subtitle block for that timestamp is purged.</p>"
+            f"<p><b>Automated Filters:</b> Removes cryptographic wallet addresses, email spam, recruitment text, and common ad URLs automatically.</p>"
+            f"<p><b>Purge Mode:</b> If 'Delete Lines with Matches' is enabled, any line containing your custom 'Find' text will be wiped completely.</p>"
+            f"<h2>NOTES</h2>"
+            f"<ul>"
+            f"<li><b>Safety:</b> The script never modifies your original files; it creates sanitized copies in a separate directory to prevent data loss.</li>"
+            f"<li><b>ASS/SSA Formatting:</b> The script intelligently targets the payload field in Dialogue/Comment lines to avoid breaking style tags.</li>"
+            f"</ul>"
+            f"<hr><p style='text-align: center; color: #888888;'><small>Licensed under GPLv3. See the <b>About</b> section for full legal details.</small></p>"
+        )
+
+        text_browser.setHtml(manual_text)
+        layout.addWidget(text_browser)
+
+        btn_close = QPushButton("Close")
+        btn_close.clicked.connect(dialog.accept)
+        layout.addWidget(btn_close, alignment=Qt.AlignmentFlag.AlignRight)
+
         dialog.exec()
 
     def show_about(self):
         dialog = QDialog(self)
         dialog.setWindowTitle("About")
-        dialog.resize(420, 320)
+        dialog.resize(550, 420)
         
         layout = QVBoxLayout(dialog)
         
         text_browser = QTextBrowser()
         text_browser.setOpenExternalLinks(True)
+        text_browser.setStyleSheet("""
+            QTextBrowser {
+                font-family: 'Segoe UI', 'Roboto', sans-serif;
+                font-size: 13px;
+                line-height: 1.5;
+                color: palette(text);
+                background-color: palette(base);
+                border: none;
+                padding: 10px;
+            }
+            h1 { color: #007acc; font-size: 20px; margin-bottom: 5px; }
+            b { color: #007acc; }
+            a { color: #007acc; text-decoration: none; }
+            hr { border: 0; border-top: 1px solid #444; margin: 10px 0; }
+        """)
         
         about_text = (
-            f"<b>SubVoid+ v{APP_VERSION}</b><br>"
-            "Copyright (C) 2026 pwshAgyjkcrg761<br>"
-            "GPLv3<br><br>"
-            "This program is free software: you can redistribute it and/or modify "
+            f"<h1>SubVoid+ v{APP_VERSION}</h1>"
+            "<p>Copyright (C) 2026 <b>pwshAgyjkcrg761</b><br>"
+            "Licensed under <b>GPLv3</b></p>"
+            "<p>This program is free software: you can redistribute it and/or modify "
             "it under the terms of the GNU General Public License as published by "
             "the Free Software Foundation, either version 3 of the License, or "
-            "(at your option) any later version.<br><br>"
-            "This program is distributed in the hope that it will be useful, "
+            "(at your option) any later version.</p>"
+            "<p>This program is distributed in the hope that it will be useful, "
             "but WITHOUT ANY WARRANTY; without even the implied warranty of "
             "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the "
-            "GNU General Public License for more details.<br><br>"
-            "You should have received a copy of the GNU General Public License "
-            "along with this program. If not, see "
-            "<a href=\"https://www.gnu.org/licenses/gpl-3.0.html\">https://www.gnu.org/licenses/gpl-3.0.html</a>.<br><br>"
-            "<hr><br>"
+            "GNU General Public License for more details.</p>"
+            "<p>Official License: <a href=\"https://www.gnu.org/licenses/gpl-3.0.html\">gnu.org/licenses/gpl-3.0.html</a></p>"
+            "<hr>"
             "<b>Icon Credits:</b><br>"
-            "'Tornado SVG Vector' (SubVoid+-vortex-indigo-icon.svg) by JoyPixels via <a href=\"https://www.svgrepo.com/svg/402817/tornado\">SVGRepo</a>.<br>"
-            "Used under MIT License. Modified by pwshAgyjkcrg761 (Color/Format)."
+            "'Tornado SVG Vector' by JoyPixels via <a href=\"https://www.svgrepo.com/svg/402817/tornado\">SVGRepo</a>.<br>"
+            "Used under MIT License. Modified by pwshAgyjkcrg761."
         )
         text_browser.setHtml(about_text)
         layout.addWidget(text_browser)
@@ -492,21 +592,44 @@ class SubtitleEditor(QMainWindow):
                                 return l_text, True
                         return None, False
 
-                    # Pass 1: Multi-line adjacent tracking logic (Check 1 line above or below for role + contact combos)
-                    if filter_recruits_enabled:
-                        for idx in range(total_lines):
+                    # Pass 1: Block-level detection for SRT files and multi-line tracking for ASS/SSA
+                    for idx in range(total_lines):
+                        if is_srt and srt_time_pattern.match(input_lines[idx]):
+                            block_indices = []
+                            block_text = ""
+                            curr = idx + 1
+                            # Identify all text lines belonging to this timestamp block
+                            while curr < total_lines and input_lines[curr].strip() != "" and not srt_time_pattern.match(input_lines[curr]) and not input_lines[curr].isdigit():
+                                block_indices.append(curr)
+                                block_text += input_lines[curr] + " "
+                                curr += 1
+                            
+                            # Check if the combined block text triggers any enabled filters or manual purges
+                            match_found = False
+                            if filter_ads_enabled and ad_pattern.search(block_text): match_found = True
+                            elif filter_tags_enabled and tag_pattern.search(block_text): match_found = True
+                            elif filter_spam_enabled and spam_pattern.search(block_text): match_found = True
+                            elif filter_recruits_enabled and recruit_pattern.search(block_text): match_found = True
+                            elif find_terms and self.check_purge.isChecked():
+                                flags = 0 if self.check_case.isChecked() else re.IGNORECASE
+                                for term in find_terms:
+                                    if re.search(re.escape(term), block_text, flags):
+                                        match_found = True
+                                        break
+                            
+                            if match_found:
+                                for b_idx in block_indices:
+                                    skip_indices.add(b_idx)
+
+                        elif is_ass_ssa and filter_recruits_enabled:
                             sub_text, is_eligible = get_line_payload(idx)
                             if is_eligible and role_regex.search(sub_text):
-                                # Check 1 line above if it is eligible dialogue/text
                                 prev_text, prev_eligible = get_line_payload(idx - 1)
                                 if prev_eligible and contact_regex.search(prev_text):
-                                    skip_indices.add(idx)
-                                    skip_indices.add(idx - 1)
-                                # Check 1 line below if it is eligible dialogue/text
+                                    skip_indices.add(idx); skip_indices.add(idx - 1)
                                 next_text, next_eligible = get_line_payload(idx + 1)
                                 if next_eligible and contact_regex.search(next_text):
-                                    skip_indices.add(idx)
-                                    skip_indices.add(idx + 1)
+                                    skip_indices.add(idx); skip_indices.add(idx + 1)
 
                     # Pass 2: Line Parsing and Content Substitutions / Stripping
                     protected_lines = []
