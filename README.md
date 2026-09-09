@@ -3,6 +3,8 @@
 
 ---
 
+![SubVoid+ Dark Mode Main Interface](images/SubVoid+-py_dark_mode_main.png)
+
 ## Overview
 SubVoid+™ is a high-performance subtitle cleanup tool designed to sanitize media libraries by removing intrusive on-screen text. It surgically identifies and purges common fansub recruitment blocks, cryptographic donation addresses, and advertisement URLs from **.srt**, **.ass**, and **.ssa** files while maintaining the original timing and file structure.
 
