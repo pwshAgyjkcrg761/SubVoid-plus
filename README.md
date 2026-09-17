@@ -46,7 +46,7 @@ This software is released under the **GNU General Public License v3**.
     * **Asset:** Tornado SVG Vector
     * **Author:** JoyPixels
     * **Source:** <a href="https://www.svgrepo.com/svg/402817/tornado" target="_blank">https://www.svgrepo.com/svg/402817/tornado</a>
-    * **License:** <a href="https://codeberg.org/pwshAgyjkcrg761/SubVoid-plus/src/branch/main/SubVoid+_internal/SubVoid+_icon/LICENSE" target="_blank">MIT License</a>
+    * **License:** <a href="https://git.disroot.org/pwshAgyjkcrg761/SubVoid-plus/src/branch/main/SubVoid+_internal/SubVoid+_icon/LICENSE" target="_blank">MIT License</a>
     * **Modifications:** Color-adjusted to Indigo and optimized for SubVoid+™ branding.
 
 ---
